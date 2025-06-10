@@ -1,0 +1,184 @@
+2024-11-01 22:32:36,904 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:32:36,905 - INFO - ====== WebDriver manager ======
+2024-11-01 22:32:37,059 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:32:37,237 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:32:37,372 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:32:39,881 - INFO - Play area 로드 완료.
+2024-11-01 22:32:39,898 - INFO - 총 페이지 수: 3
+2024-11-01 22:32:39,907 - INFO - 현재 페이지: 1
+2024-11-01 22:32:39,914 - INFO - 공연 아이템 수: 8
+2024-11-01 22:32:40,544 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:32:55,940 - ERROR - 다음 페이지 버튼을 클릭하는 중 오류 발생: Message: 
+
+2024-11-01 22:35:26,496 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:35:26,496 - INFO - ====== WebDriver manager ======
+2024-11-01 22:35:26,591 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:35:26,877 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:35:27,063 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:35:28,833 - INFO - Play area 로드 완료.
+2024-11-01 22:35:28,846 - INFO - 총 페이지 수: 3
+2024-11-01 22:35:28,859 - INFO - 현재 페이지: 1
+2024-11-01 22:35:28,876 - INFO - 공연 아이템 수: 4
+2024-11-01 22:35:29,318 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:35:44,764 - ERROR - 다음 페이지 버튼을 클릭하는 중 오류 발생: Message: 
+
+2024-11-01 22:41:45,184 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:41:45,184 - INFO - ====== WebDriver manager ======
+2024-11-01 22:41:45,279 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:41:45,408 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:41:45,534 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:41:47,160 - INFO - Play area 로드 완료.
+2024-11-01 22:41:47,521 - INFO - 총 페이지 수: 3
+2024-11-01 22:41:47,536 - INFO - 현재 페이지: 1
+2024-11-01 22:41:47,593 - INFO - 공연 아이템 수: 4
+2024-11-01 22:41:48,088 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:41:48,100 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:41:51,111 - INFO - Play area 로드 완료.
+2024-11-01 22:41:51,120 - INFO - 총 페이지 수: 3
+2024-11-01 22:41:51,129 - INFO - 현재 페이지: 2
+2024-11-01 22:41:51,145 - INFO - 공연 아이템 수: 4
+2024-11-01 22:41:51,559 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:41:51,572 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:41:54,589 - INFO - Play area 로드 완료.
+2024-11-01 22:41:54,605 - INFO - 총 페이지 수: 3
+2024-11-01 22:41:54,617 - INFO - 현재 페이지: 3
+2024-11-01 22:41:54,638 - INFO - 공연 아이템 수: 1
+2024-11-01 22:41:54,678 - INFO - 마지막 페이지에 도달했습니다.
+2024-11-01 22:42:11,503 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:42:11,503 - INFO - ====== WebDriver manager ======
+2024-11-01 22:42:11,597 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:11,728 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:11,855 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:42:13,749 - INFO - Play area 로드 완료.
+2024-11-01 22:42:13,762 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:13,772 - INFO - 현재 페이지: 1
+2024-11-01 22:42:13,789 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:14,230 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:14,245 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:15,262 - INFO - Play area 로드 완료.
+2024-11-01 22:42:15,277 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:15,289 - INFO - 현재 페이지: 2
+2024-11-01 22:42:15,308 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:15,718 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:15,733 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:16,752 - INFO - Play area 로드 완료.
+2024-11-01 22:42:16,767 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:16,778 - INFO - 현재 페이지: 3
+2024-11-01 22:42:16,792 - ERROR - 가시적인 card_area를 찾을 수 없습니다.
+2024-11-01 22:42:24,672 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:42:24,672 - INFO - ====== WebDriver manager ======
+2024-11-01 22:42:24,791 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:24,918 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:25,039 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:42:26,478 - INFO - Play area 로드 완료.
+2024-11-01 22:42:26,494 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:26,507 - INFO - 현재 페이지: 1
+2024-11-01 22:42:26,523 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:26,964 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:26,976 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:26,993 - INFO - Play area 로드 완료.
+2024-11-01 22:42:27,002 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:27,010 - INFO - 현재 페이지: 2
+2024-11-01 22:42:27,026 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:27,439 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:27,448 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:27,465 - INFO - Play area 로드 완료.
+2024-11-01 22:42:27,473 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:27,481 - INFO - 현재 페이지: 3
+2024-11-01 22:42:27,499 - INFO - 공연 아이템 수: 1
+2024-11-01 22:42:27,536 - INFO - 마지막 페이지에 도달했습니다.
+2024-11-01 22:42:33,058 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:42:33,058 - INFO - ====== WebDriver manager ======
+2024-11-01 22:42:33,150 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:33,279 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:42:33,414 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:42:35,034 - INFO - Play area 로드 완료.
+2024-11-01 22:42:35,049 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:35,062 - INFO - 현재 페이지: 1
+2024-11-01 22:42:35,080 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:35,511 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:35,523 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:35,528 - INFO - Play area 로드 완료.
+2024-11-01 22:42:35,537 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:35,546 - INFO - 현재 페이지: 2
+2024-11-01 22:42:35,560 - INFO - 공연 아이템 수: 4
+2024-11-01 22:42:35,980 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:42:35,991 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:42:35,997 - INFO - Play area 로드 완료.
+2024-11-01 22:42:36,007 - INFO - 총 페이지 수: 3
+2024-11-01 22:42:36,015 - INFO - 현재 페이지: 3
+2024-11-01 22:42:36,033 - INFO - 공연 아이템 수: 1
+2024-11-01 22:42:36,072 - INFO - 마지막 페이지에 도달했습니다.
+2024-11-01 22:57:20,812 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:57:20,813 - INFO - ====== WebDriver manager ======
+2024-11-01 22:57:20,977 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:21,116 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:21,246 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:57:23,463 - INFO - Play area 로드 완료.
+2024-11-01 22:57:23,908 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:23,922 - INFO - 현재 페이지: 1
+2024-11-01 22:57:23,998 - INFO - 공연 아이템 수: 4
+2024-11-01 22:57:24,557 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:57:24,571 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:57:24,588 - INFO - Play area 로드 완료.
+2024-11-01 22:57:24,599 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:24,608 - INFO - 현재 페이지: 2
+2024-11-01 22:57:24,625 - INFO - 공연 아이템 수: 4
+2024-11-01 22:57:25,068 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:57:25,082 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:57:25,099 - INFO - Play area 로드 완료.
+2024-11-01 22:57:25,108 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:25,117 - INFO - 현재 페이지: 3
+2024-11-01 22:57:25,140 - INFO - 공연 아이템 수: 1
+2024-11-01 22:57:25,183 - INFO - 마지막 페이지에 도달했습니다.
+2024-11-01 22:57:39,756 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:57:39,756 - INFO - ====== WebDriver manager ======
+2024-11-01 22:57:39,862 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:39,997 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:40,128 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:57:41,413 - INFO - Play area 로드 완료.
+2024-11-01 22:57:41,443 - ERROR - 총 페이지 수를 찾는 중 오류 발생: invalid literal for int() with base 10: ''
+2024-11-01 22:57:47,828 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 22:57:47,828 - INFO - ====== WebDriver manager ======
+2024-11-01 22:57:47,939 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:48,092 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 22:57:48,257 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 22:57:49,524 - INFO - Play area 로드 완료.
+2024-11-01 22:57:49,974 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:49,990 - INFO - 현재 페이지: 1
+2024-11-01 22:57:50,065 - INFO - 공연 아이템 수: 4
+2024-11-01 22:57:50,591 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:57:50,609 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:57:50,626 - INFO - Play area 로드 완료.
+2024-11-01 22:57:50,635 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:50,645 - INFO - 현재 페이지: 2
+2024-11-01 22:57:50,664 - INFO - 공연 아이템 수: 4
+2024-11-01 22:57:51,103 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 22:57:51,116 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 22:57:51,134 - INFO - Play area 로드 완료.
+2024-11-01 22:57:51,143 - INFO - 총 페이지 수: 3
+2024-11-01 22:57:51,152 - INFO - 현재 페이지: 3
+2024-11-01 22:57:51,174 - INFO - 공연 아이템 수: 1
+2024-11-01 22:57:51,218 - INFO - 마지막 페이지에 도달했습니다.
+2024-11-01 23:03:39,028 - INFO - Base URL: https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bjky&x_csa=%7B%22workType%22%3A%22play%22%2C%22fromUi%22%3A%22kb%22%7D&pkid=1&os=3369891&qvt=0&query=knk%20%EA%B3%B5%EC%97%B0
+2024-11-01 23:03:39,028 - INFO - ====== WebDriver manager ======
+2024-11-01 23:03:39,190 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 23:03:39,321 - INFO - Get LATEST chromedriver version for google-chrome
+2024-11-01 23:03:39,445 - INFO - Driver [/Users/johyeongon/.wdm/drivers/chromedriver/mac64/130.0.6723.91/chromedriver-mac-arm64/chromedriver] found in cache
+2024-11-01 23:03:41,774 - INFO - Play area 로드 완료.
+2024-11-01 23:03:42,206 - INFO - 총 페이지 수: 3
+2024-11-01 23:03:42,241 - INFO - 현재 페이지: 1
+2024-11-01 23:03:42,296 - INFO - 공연 아이템 수: 4
+2024-11-01 23:03:42,848 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 23:03:42,864 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 23:03:42,921 - INFO - Play area 로드 완료.
+2024-11-01 23:03:42,930 - INFO - 총 페이지 수: 3
+2024-11-01 23:03:42,939 - INFO - 현재 페이지: 2
+2024-11-01 23:03:42,958 - INFO - 공연 아이템 수: 4
+2024-11-01 23:03:43,405 - INFO - 다음 페이지 버튼을 클릭했습니다.
+2024-11-01 23:03:43,418 - INFO - 페이지 번호가 업데이트되었습니다.
+2024-11-01 23:03:43,479 - INFO - Play area 로드 완료.
+2024-11-01 23:03:43,489 - INFO - 총 페이지 수: 3
+2024-11-01 23:03:43,499 - INFO - 현재 페이지: 3
+2024-11-01 23:03:43,521 - INFO - 공연 아이템 수: 1
+2024-11-01 23:03:43,564 - INFO - 마지막 페이지에 도달했습니다.

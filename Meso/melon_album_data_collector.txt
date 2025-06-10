@@ -1,0 +1,716 @@
+# melon_album_data_collector.py
+
+import httpx
+import asyncio
+from typing import List, Dict, Any
+from bs4 import BeautifulSoup
+import os
+import sys
+import re
+import json
+from datetime import datetime
+from dotenv import load_dotenv
+import logging
+import random
+import time
+from functools import lru_cache
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.logger import setup_logger
+
+load_dotenv()
+
+logger = setup_logger(__name__)
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)",
+    # 추가 사용자 에이전트를 여기에 포함
+]
+
+HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,image/apng,*/*;q=0.8,"
+              "application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "DNT": "1",
+    "Pragma": "no-cache",
+    "Referer": "https://www.melon.com/",
+    "User-Agent": random.choice(USER_AGENTS),
+}
+
+semaphore = asyncio.Semaphore(15)
+
+@lru_cache(maxsize=None)
+def string_to_integer(string):
+    """단위가 포함된 문자열을 정수로 변환합니다."""
+    units = {'K': 10**3, 'M': 10**6, 'B': 10**9}
+    for unit in units:
+        if unit in string:
+            return int(float(string.replace(unit, '').replace(',', '').replace('+', '')) * units[unit])
+    return int(string.replace(',', '').replace('+', ''))
+
+def convert_release_date(date_value):
+    """발매일 문자열을 datetime 객체로 변환합니다."""
+    try:
+        return datetime.strptime(date_value, '%Y.%m.%d')
+    except ValueError:
+        return datetime.strptime(date_value, '%Y-%m-%d')
+
+async def fetch_with_retry(client: httpx.AsyncClient, url: str, headers: Dict[str, str], params: Dict[str, Any] = None, retries: int = 3) -> httpx.Response:
+    """재시도 로직을 포함한 HTTP GET 요청을 수행합니다."""
+    for attempt in range(retries):
+        try:
+            async with semaphore:
+                response = await client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error on {url}: {e}")
+            if attempt < retries - 1:
+                wait_time = 2 ** attempt
+                logger.info(f"Retrying after {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                raise
+
+async def fetch_album_data(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
+    """앨범 데이터를 가져옵니다."""
+    try:
+        # 각 요청마다 다른 User-Agent를 사용하도록 헤더를 복사하고 업데이트
+        headers = HEADERS.copy()
+        headers['User-Agent'] = random.choice(USER_AGENTS)
+        headers['Referer'] = 'https://www.melon.com/'
+        response = await fetch_with_retry(client, url, headers)
+        html_content = response.text
+        album_data = await parse_album_html(client, html_content, url)
+        return album_data
+    except Exception as e:
+        logger.error(f"Unexpected error while fetching {url}: {e}")
+    return {}
+
+async def parse_album_html(client: httpx.AsyncClient, html_content: str, url: str) -> Dict[str, Any]:
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract album details
+        album_details = {}
+        section_info = soup.find('div', class_='section_info')
+        if section_info:
+            # Album cover image
+            album_cover_img_tag = section_info.find('div', class_='thumb').find('img')
+            if album_cover_img_tag:
+                album_cover_url = album_cover_img_tag.get('src', '').split('?')[0]
+                album_details['album_cover_url'] = album_cover_url
+
+            # Album title
+            album_title_tag = section_info.find('div', class_='song_name')
+            if album_title_tag:
+                album_title = album_title_tag.get_text(strip=True)
+                album_details['album_title'] = album_title.replace("앨범명","")
+
+            # Album type (e.g., [EP], [Full-length])
+            album_type_tag = section_info.find('span', class_='gubun')
+            if album_type_tag:
+                album_type = album_type_tag.get_text(strip=True)
+                album_details['album_type'] = album_type.strip('[]')
+
+            # Artist
+            artist_tag = section_info.find('div', class_='artist').find('a')
+            if artist_tag:
+                artist_name = artist_tag.get_text(strip=True)
+                artist_href = artist_tag.get('href', '')
+                # Extract artist id from href
+                artist_id_match = re.search(r"goArtistDetail\('(\d+)'\)", artist_href)
+                if artist_id_match:
+                    artist_id = artist_id_match.group(1)
+                else:
+                    artist_id = ''
+                album_details['artist_name'] = artist_name
+                album_details['artist_id'] = artist_id
+
+            # Meta info (release date, genre, agency, etc.)
+            meta_info = {}
+            meta_dl = section_info.find('dl', class_='list')
+            if meta_dl:
+                dt_tags = meta_dl.find_all('dt')
+                dd_tags = meta_dl.find_all('dd')
+                for dt, dd in zip(dt_tags, dd_tags):
+                    key = dt.get_text(strip=True)
+                    value = dd.get_text(strip=True)
+                    # Map keys to English
+                    key_map = {
+                        '발매일': 'release_date',
+                        '장르': 'genre',
+                        '발매사': 'publisher',
+                        '기획사': 'agency',
+                    }
+                    eng_key = key_map.get(key, key)
+                    meta_info[eng_key] = value
+            album_details.update(meta_info)
+
+            # Album ID (extracted from URL)
+            album_id_match = re.search(r"albumId=(\d+)", url)
+            if album_id_match:
+                album_id = album_id_match.group(1)
+                album_details['album_id'] = album_id
+            else:
+                album_details['album_id'] = ''
+
+            # Album likes
+            album_like_count = await get_album_like_count(client, album_details.get('album_id', ''))
+            album_details['likes'] = album_like_count
+
+            # Album ratings
+            album_ratings = await get_album_ratings(client, album_details.get('album_id', ''))
+            album_details.update(album_ratings)
+
+            # Album comments count
+            album_comments = await get_album_comments(client, album_details.get('album_id', ''))
+            album_details['comments_count'] = len(album_comments)
+            album_details['comments'] = album_comments
+
+            # Album introduction
+            album_intro = ''
+            section_albuminfo = soup.find('div', class_='section_albuminfo')
+            if section_albuminfo:
+                album_intro_div = section_albuminfo.find('div', class_='dtl_albuminfo')
+                if album_intro_div:
+                    intro_texts = [div.get_text(strip=True) for div in album_intro_div.find_all('div')]
+                    album_intro = '\n'.join(intro_texts)
+            album_details['album_intro'] = album_intro
+
+        # Extract tracklist
+        tracklist = []
+        section_contin = soup.find('div', class_='section_contin')
+        if section_contin:
+            tbody = section_contin.find('tbody')
+            if tbody:
+                song_rows = tbody.find_all('tr')
+                for row in song_rows:
+                    song_info = {}
+                    # Song ID from input checkbox
+                    input_checkbox = row.find('input', {'class': 'input_check'})
+                    if input_checkbox:
+                        song_id = input_checkbox.get('value')
+                        song_info['song_id'] = song_id
+                        # Fetch song data
+                        song_extra_info = await get_song_data(client, song_id)
+                        song_info.update(song_extra_info)
+                    else:
+                        logger.error(f"Song ID not found for a song in album URL {url}")
+                        song_info['song_id'] = ''
+                    # Song number
+                    song_number_tag = row.find('span', class_='rank')
+                    if song_number_tag:
+                        song_number_text = song_number_tag.get_text(strip=True)
+                        if song_number_text.isdigit():
+                            song_info['track_number'] = int(song_number_text)
+                        else:
+                            song_info['track_number'] = None
+                    else:
+                        song_info['track_number'] = None
+                    # Song title
+                    song_title_tag = row.find('div', class_='ellipsis').find('a')
+                    if song_title_tag:
+                        song_title = song_title_tag.get_text(strip=True)
+                        song_info['song_title'] = song_title
+                    else:
+                        song_info['song_title'] = ''
+                    # Artist
+                    artist_tag = row.find('div', class_='ellipsis rank02').find('a')
+                    if artist_tag:
+                        artist_name = artist_tag.get_text(strip=True)
+                        artist_href = artist_tag.get('href', '')
+                        artist_id_match = re.search(r"goArtistDetail\('(\d+)'\)", artist_href)
+                        if artist_id_match:
+                            artist_id = artist_id_match.group(1)
+                            song_info['artist_id'] = artist_id
+                        else:
+                            song_info['artist_id'] = ''
+                        song_info['artist_name'] = artist_name
+                    else:
+                        song_info['artist_name'] = ''
+                        song_info['artist_id'] = ''
+                    # Likes
+                    song_like_count = await get_song_like_count(client, song_info.get('song_id', ''))
+                    song_info['likes'] = song_like_count
+
+                    tracklist.append(song_info)
+
+        # Fetch artist data
+        artist_data = {}
+        artist_id = album_details.get('artist_id', '')
+        if artist_id:
+            artist_data = await get_artist_data(client, artist_id)
+            album_details['artist_info'] = artist_data
+
+        album_data = {
+            'url': url,
+            'album_details': album_details,
+            'tracklist': tracklist,
+        }
+
+        return album_data
+
+    except Exception as e:
+        logger.error(f"Error parsing HTML for {url}: {e}")
+    return {}
+
+async def get_album_like_count(client: httpx.AsyncClient, album_id: str) -> int:
+    """앨범의 좋아요 수를 가져옵니다."""
+    album_like_url = 'https://www.melon.com/commonlike/getAlbumLike.json'
+    params = {'contsIds': album_id}
+    try:
+        headers = HEADERS.copy()
+        headers['User-Agent'] = random.choice(USER_AGENTS)
+        headers['Referer'] = 'https://www.melon.com/'
+        response = await fetch_with_retry(client, album_like_url, headers, params=params)
+        data = response.json()
+        sum_cnt = data['contsLike'][0]['SUMMCNT']
+        try:
+            like_count = int(sum_cnt)
+        except (ValueError, TypeError):
+            like_count = 0
+        return like_count
+    except Exception as e:
+        logger.error(f"Error fetching album likes for album ID {album_id}: {e}")
+    return 0
+
+async def get_album_ratings(client: httpx.AsyncClient, album_id: str) -> Dict[str, Any]:
+    grades_url = 'https://www.melon.com/album/albumGradeInfo.json'
+    params = {'albumId': album_id}
+    try:
+        response = await fetch_with_retry(client, grades_url, HEADERS, params=params)
+        data = response.json()
+        ratings_info = {
+            'rating_count': int(data['infoGrade']['PTCPNMPRCO']),
+            'rating_score': float(data['infoGrade']['TOTAVRGSCORE']),
+            'rating_average': float(data['infoGrade']['AVRGSCORERATING']),
+        }
+        return ratings_info
+    except Exception as e:
+        logger.error(f"Error fetching album ratings for album ID {album_id}: {e}")
+    return {}
+
+async def get_album_comments(client: httpx.AsyncClient, album_id: str) -> List[Dict[str, Any]]:
+    comments_url = 'https://cmt.melon.com/cmt/api/api_loadPgn.json'
+    params = {
+        'chnlSeq' : '102',
+        'contsRefValue' : album_id,
+        'startIndex' : '1',
+        'pageSize' : '1000',
+    }
+
+    comments_headers = {
+        'Referer': 'https://www.melon.com/album/detail.htm?albumId=' + album_id,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
+    }
+    try:
+        response = await fetch_with_retry(client, comments_url, HEADERS, params=params)
+        data = response.json()
+
+        comments_list = data.get('result', {}).get('cmtList', [])
+        comments = []
+        
+        for comment in comments_list:
+            cmt_info = comment.get('cmtInfo', {})
+            member_info = comment.get('memberInfo', {})
+            
+            comments.append({
+                'comment_id': cmt_info.get('cmtSeq'),
+                'content': cmt_info.get('cmtCont'),
+                'date': f"{cmt_info.get('dsplyDate', '')} {cmt_info.get('dsplyTime', '')}",
+                'user_name': member_info.get('memberNickname'),
+                'user_id': member_info.get('memberKey'),
+            })
+        return comments
+    
+    except Exception as e:
+        logger.error(f"Error fetching comments for album ID {album_id}: {e}")
+    return []
+
+async def get_song_like_count(client: httpx.AsyncClient, song_id: str) -> int:
+    song_like_url = 'https://www.melon.com/commonlike/getSongLike.json'
+    params = {'contsIds': song_id}
+    try:
+        headers = HEADERS.copy()
+        headers['User-Agent'] = random.choice(USER_AGENTS)
+        headers['Referer'] = 'https://www.melon.com/'
+        response = await fetch_with_retry(client, song_like_url, headers, params=params)
+        data = response.json()
+        sum_cnt = data['contsLike'][0]['SUMMCNT']
+        try:
+            like_count = int(sum_cnt)
+        except (ValueError, TypeError):
+            like_count = 0
+        return like_count
+    except Exception as e:
+        logger.error(f"Error fetching song likes for song ID {song_id}: {e}")
+    return 0
+
+import httpx
+import re
+from bs4 import BeautifulSoup
+from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def get_song_data(client: httpx.AsyncClient, song_id: str) -> Dict[str, Any]:
+    song_url = f'https://www.melon.com/song/detail.htm?songId={song_id}'
+    song_data = {}
+    song_data['id'] = song_id
+
+    try:
+        # Song detail page
+        
+        response = await fetch_with_retry(client, song_url, HEADERS)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Song Info Section
+        song_info_section = soup.find('div', class_='section_info')
+        if not song_info_section:
+            logger.error(f"song_info_section not found for song ID {song_id}")
+            return {}
+
+        # Song Title
+        song_name_tag = song_info_section.find('div', class_='song_name')
+        if song_name_tag:
+            song_title = song_name_tag.get_text(strip=True).replace('곡명', '').strip()
+            song_data['song_title'] = song_title
+
+        # Artist
+        artist_tag = song_info_section.find('div', class_='artist').find('a', class_='artist_name')
+        if artist_tag:
+            artist_name = artist_tag.get_text(strip=True)
+            song_data['artist_name'] = artist_name
+            artist_id_match = re.search(r"goArtistDetail\('(\d+)'\)", artist_tag.get('href', ''))
+            if artist_id_match:
+                song_data['artist_id'] = artist_id_match.group(1)
+
+        # Album
+        album_tag = song_info_section.find('dd').find('a')
+        if album_tag:
+            album_title = album_tag.get_text(strip=True)
+            song_data['album_title'] = album_title
+            album_id_match = re.search(r"goAlbumDetail\('(\d+)'\)", album_tag.get('href', ''))
+            if album_id_match:
+                song_data['album_id'] = album_id_match.group(1)
+
+
+        # Genre, Release Date, and other meta info
+        meta_info = {}
+        meta_dl = song_info_section.find('dl', class_='list')
+        if meta_dl:
+            dt_tags = meta_dl.find_all('dt')
+            dd_tags = meta_dl.find_all('dd')
+            for dt, dd in zip(dt_tags, dd_tags):
+                key = dt.get_text(strip=True)
+                value = dd.get_text(strip=True)
+                key_map = {
+                    '앨범': 'album',
+                    '발매일': 'release_date',
+                    '장르': 'genre',
+                    'FLAC': 'flac_info',
+                }
+                eng_key = key_map.get(key, key)
+                if eng_key == 'genre':
+                    value = value.split(", ")  # Convert genre to list
+                meta_info[eng_key] = value
+        song_data.update(meta_info)
+
+        # Lyrics
+        lyrics_section = soup.find('div', id='lyricArea')
+        if lyrics_section:
+            lyrics = lyrics_section.get_text("\n", strip=True)
+            song_data['lyrics'] = lyrics
+
+        # Composer, Lyricist, Arranger Information
+        creators_section = soup.find('div', class_='section_prdcr')
+        if creators_section:
+            creators = []
+            creator_list = creators_section.find_all('li')
+            for creator in creator_list:
+                creator_type = creator.find('span', class_='type').get_text(strip=True)
+                creator_name_tag = creator.find('a', class_='artist_name')
+                if creator_name_tag:
+                    creator_name = creator_name_tag.get_text(strip=True)
+                    creator_id_match = re.search(r"goArtistDetail\((\d+)\)", creator_name_tag.get('href', ''))
+                    creator_id = creator_id_match.group(1) if creator_id_match else None
+                    creators.append({
+                        'name': creator_name,
+                        'type': creator_type,
+                        'id': creator_id
+                    })
+            song_data['creators'] = creators
+
+        # Related Videos
+        videos_section = soup.find('div', class_='section_movie')
+        if videos_section:
+            videos = []
+            video_list = videos_section.find_all('li')
+            for video in video_list:
+                video_title_tag = video.find('a', class_='album_name')
+                video_artist_tag = video.find('a', class_='artist_name')
+                video_duration = video.find('span', class_='time').get_text(strip=True)
+                if video_title_tag and video_artist_tag:
+                    video_title = video_title_tag.get_text(strip=True)
+                    video_artist = video_artist_tag.get_text(strip=True)
+                    video_id_match = re.search(r"goMvDetail\('\d+', '(\d+)'\)", video_title_tag.get('href', ''))
+                    video_id = video_id_match.group(1) if video_id_match else None
+                    videos.append({
+                        'title': video_title,
+                        'artist': video_artist,
+                        'duration': video_duration,
+                        'id': video_id
+                    })
+            song_data['related_videos'] = videos
+
+        # Streaming card data URL
+        streaming_url = f'https://m2.melon.com/m6/chart/streaming/card.json?cpId=AS40&cpKey=14LNC3&appVer=6.0.0&songId={song_id}'
+        
+        # 곡 좋아요 수 URL
+        hearts_url = 'https://www.melon.com/commonlike/getSongLike.json'
+        hearts_params = {'contsIds': song_id}
+        
+        # 비동기 요청 보내기
+        streaming_response = await client.get(streaming_url, headers=HEADERS)
+        hearts_response = await client.get(hearts_url, params=hearts_params, headers=HEADERS)
+        
+        # JSON 응답 처리
+        api_response = streaming_response.json()
+        hearts_song_json = hearts_response.json()
+
+        listeners = 0
+        streams = 0
+        total_hearts = 0
+
+        # 조회수 및 스트리밍 수 처리
+        if api_response.get('response', {}).get('VIEWTYPE') == "2":
+            if api_response['response'].get('STREAMUSER') != '':
+                listeners = string_to_integer(api_response['response']['STREAMUSER'])
+            if api_response['response'].get('STREAMCOUNT') != '':
+                streams = string_to_integer(api_response['response']['STREAMCOUNT'])
+
+        # 좋아요 수 처리
+        sum_cnt = hearts_song_json.get('contsLike', [{}])[0].get('SUMMCNT', '0')
+        try:
+            hearts = int(sum_cnt)
+        except (ValueError, TypeError):
+            hearts = 0
+
+        # Song data update
+        song_data.update({
+            'listeners': listeners,
+            'streams': streams,
+            'hearts': hearts,
+        })
+        return song_data
+
+    except Exception as e:
+        logger.error(f"Error fetching song data for song ID {song_id}: {e}")
+        return {}
+
+
+async def get_artist_data(client: httpx.AsyncClient, artist_id: str) -> Dict[str, Any]:
+    artist_url = f'https://www.melon.com/artist/detail.htm?artistId={artist_id}'
+    cookies = {
+        '__T_': '1',
+        '__T_SECURE': '1',
+        'PCID': '17253568021593451713142',
+        'PC_PCID': '17253568021593451713142',
+        'POC': 'MP10',
+        # Add other cookie values as needed
+    }
+    artist_header = {
+        'Referer': f'https://www.melon.com/artist/timeline.htm?artistId={artist_id}',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Sec-CH-UA': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'Sec-CH-UA-Mobile': '?0',
+        'Sec-CH-UA-Platform': '"macOS"'
+    }
+    try:
+        response = await client.get(artist_url, headers=artist_header, cookies=cookies)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        artist_data = {}
+        artist_data['id'] = artist_id
+
+        # Artist Name
+        artist_name_tag = soup.find('p', class_='title_atist')
+        if artist_name_tag:
+            artist_name = artist_name_tag.get_text(strip=True)
+            artist_data['artist_name'] = artist_name.replace('아티스트명','')
+
+        # Artist Image
+        artist_image_tag = soup.find('img', class_='image_typeAll')
+        if artist_image_tag:
+            artist_image_url = artist_image_tag.get('src', '')
+            artist_data['artist_image_url'] = artist_image_url
+
+        # Artist Likes (Followers)
+        artist_follower_tag = soup.find('span', class_='cnt')
+        if artist_follower_tag:
+            follower_text = artist_follower_tag.get_text(strip=True).replace(',', '')
+            follower_count = int(follower_text) if follower_text.isdigit() else 0
+            artist_data['followers'] = follower_count
+
+        # Awards
+        awards_section = soup.find('div', class_='section_atistinfo01')
+        if awards_section:
+            awards_list = awards_section.find_all('dd')
+            awards = []
+            for award in awards_list:
+                award_text = award.get_text(strip=True)
+                awards.append(award_text)
+            artist_data['awards'] = awards
+
+        # Activity Information
+        activity_section = soup.find('div', class_='section_atistinfo03')
+        if activity_section:
+            # Debut Song
+            debut_song_info = activity_section.find('div', class_='debutsong_info')
+            if debut_song_info:
+                debut_song = {}
+                song_link = debut_song_info.find('a', class_='thumb')
+                if song_link:
+                    href = song_link.get('href', '')
+                    song_id_match = re.search(r"goSongDetail\('(\d+)'\)", href)
+                    if song_id_match:
+                        debut_song['song_id'] = song_id_match.group(1)
+                song_title_tag = debut_song_info.find('dt')
+                if song_title_tag:
+                    song_title = song_title_tag.get_text(strip=True)
+                    debut_song['title'] = song_title
+                artist_data['debut_song'] = debut_song
+
+            # Activity Info
+            activity_info_dl = activity_section.find('dl', class_='list_define clfix')
+            if activity_info_dl:
+                dt_tags = activity_info_dl.find_all('dt')
+                dd_tags = activity_info_dl.find_all('dd')
+                for dt, dd in zip(dt_tags, dd_tags):
+                    key = dt.get_text(strip=True)
+                    value = dd.get_text(strip=True).split('곡재생')[0]
+                    key_map = {
+                        '데뷔': 'debut_date',
+                        '활동년대': 'active_years',
+                        '유형': 'type',
+                        '장르': 'genre',
+                        '소속사명': 'agency_name',
+                    }
+                    eng_key = key_map.get(key, key)
+                    artist_data[eng_key] = value
+
+        # Group Members
+        group_members_section = activity_section.find('div', class_='wrap_gmem')
+        if group_members_section:
+            members = []
+            member_list = group_members_section.find_all('li')
+            for member in member_list:
+                member_info = {}
+                name_tag = member.find('a', class_='ellipsis')
+                if name_tag:
+                    member_info['name'] = name_tag.get_text(strip=True)
+                profile_img_tag = member.find('img')
+                if profile_img_tag:
+                    member_info['profile_image'] = profile_img_tag.get('src', '')
+                members.append(member_info)
+            artist_data['group_members'] = members
+
+        # Personal Information
+        personal_info_section = soup.find('div', class_='section_atistinfo04')
+        if personal_info_section:
+            personal_info_dl = personal_info_section.find('dl', class_='list_define clfix')
+            if personal_info_dl:
+                dt_tags = personal_info_dl.find_all('dt')
+                dd_tags = personal_info_dl.find_all('dd')
+                for dt, dd in zip(dt_tags, dd_tags):
+                    key = dt.get_text(strip=True)
+                    value = dd.get_text(strip=True)
+                    key_map = {
+                        '국적': 'nationality',
+                    }
+                    eng_key = key_map.get(key, key)
+                    artist_data[eng_key] = value
+
+        # Related Information
+        related_info_section = soup.find('div', class_='section_atistinfo05')
+        if related_info_section:
+            # SNS Links
+            sns_dl = related_info_section.find('dl', class_='list_define_sns clfix')
+            if sns_dl:
+                sns_links = {}
+                sns_buttons = sns_dl.find_all('button', class_='btn_sns02')
+                for button in sns_buttons:
+                    sns_type = button.get('title', '').split(' -')[0]
+                    onclick_attr = button.get('onclick', '')
+                    sns_url_match = re.search(r"window\.open\('([^']+)'", onclick_attr)
+                    if sns_url_match:
+                        sns_url = sns_url_match.group(1)
+                        sns_links[sns_type] = sns_url
+                artist_data['sns_links'] = sns_links
+
+            # Other Links
+            other_dl = related_info_section.find('dl', class_='list_define clfix')
+            if other_dl:
+                dt_tags = other_dl.find_all('dt')
+                dd_tags = other_dl.find_all('dd')
+                for dt, dd in zip(dt_tags, dd_tags):
+                    key = dt.get_text(strip=True)
+                    link_tag = dd.find('a')
+                    value = link_tag.get('href', '') if link_tag else ''
+                    key_map = {
+                        'YouTube': 'youtube',
+                    }
+                    eng_key = key_map.get(key, key)
+                    artist_data[eng_key] = value
+
+        # Artist Introduction
+        artist_intro_section = soup.find('div', class_='section_atistinfo02')
+        if artist_intro_section:
+            intro_div = artist_intro_section.find('div', class_='atist_insdc')
+            if intro_div:
+                artist_intro = intro_div.get_text(strip=True)
+                artist_data['introduction'] = artist_intro
+        return artist_data
+    except Exception as e:
+        logger.error(f"Error fetching artist data for artist ID {artist_id}: {e}")
+    return {}
+
+async def fetch_album_data_with_delay(client: httpx.AsyncClient, url: str, delay: float) -> Dict[str, Any]:
+    await asyncio.sleep(delay)
+    return await fetch_album_data(client, url)
+
+async def get_melon_album_data(album_urls: List[str]) -> List[Dict[str, Any]]:
+    """앨범 URL 리스트를 받아 데이터를 수집합니다."""
+    results = []
+    async with httpx.AsyncClient(timeout=30.0, headers=HEADERS) as client:
+        tasks = []
+        for index, url in enumerate(album_urls):
+            delay = random.uniform(1, 3)  # 1초에서 3초 사이의 랜덤 딜레이
+            tasks.append(asyncio.create_task(fetch_album_data_with_delay(client, url, delay)))
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        for resp in responses:
+            if isinstance(resp, Exception):
+                logger.error(f"Error during data collection: {resp}")
+            else:
+                results.append(resp)
+    return results

@@ -1,0 +1,390 @@
+import os
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+import joblib
+import asyncio
+import logging
+import re
+
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/..')
+
+from konlpy.tag import Okt
+from sklearn.feature_extraction.text import CountVectorizer
+
+from Firebase.firestore_handler import _load_data
+from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
+import pytz
+
+from utils.logger import setup_logger
+logger = setup_logger(__name__)
+
+def load_data():
+    """
+    데이터 로드 함수: 공연 데이터, 앨범 데이터, 노래 데이터, 아티스트 데이터, YouTube 데이터 로드
+    Firestore에서 데이터를 로드합니다.
+    """
+    # Firestore 컬렉션에서 데이터 로드
+    performance_data = _load_data('performance')
+    albums_data = _load_data('albums')
+    songs_data = _load_data('songs')
+    artists_data = _load_data('artists')
+    youtube_data = _load_data('YoutubeVideos')
+
+    # 로드한 데이터를 DataFrame으로 변환
+    performance_df = pd.DataFrame(performance_data)
+    albums_df = pd.DataFrame(albums_data)
+    songs_df = pd.DataFrame(songs_data)
+    artists_df = pd.DataFrame(artists_data)
+    youtube_df = pd.DataFrame(youtube_data)
+    snippet_df = pd.json_normalize(youtube_df['snippet'])
+    youtube_df = pd.concat([youtube_df, snippet_df], axis=1)
+
+    logger.info("Firestore에서 데이터 로딩 완료")
+    return performance_df, albums_df, songs_df, artists_df, youtube_df
+
+def preprocess_data(performance_df, albums_df, songs_df, artists_df, youtube_df):
+    """
+    데이터 전처리 및 피처 엔지니어링 함수
+    """
+    # 'None' 문자열과 실제 None 값을 모두 NaN으로 변환
+    performance_df['revenue'] = performance_df['revenue'].replace(['None', None], np.nan)
+
+    # 쉼표 제거 후 숫자로 변환 시도
+    performance_df['revenue'] = performance_df['revenue'].astype(str).str.replace(',', '').replace('nan', np.nan).astype(float)
+
+    # revenue가 0인 경우를 NaN으로 변환
+    performance_df['revenue'] = performance_df['revenue'].replace(0, np.nan)
+
+    performance_df['start_period'] = performance_df['start_period'].astype(str).str.rstrip('.')
+    performance_df['end_period'] = performance_df['end_period'].astype(str).str.rstrip('.')
+    
+    # 날짜 형식 변환
+    performance_df['start_period'] = pd.to_datetime(performance_df['start_period'], format='%Y.%m.%d', errors='coerce')
+    performance_df['end_period'] = pd.to_datetime(performance_df['end_period'], format='%Y.%m.%d', errors='coerce')
+    
+    albums_df['released_date'] = pd.to_datetime(albums_df['released_date'], errors='coerce')
+    songs_df['released_date'] = pd.to_datetime(songs_df['released_date'], errors='coerce')
+    youtube_df['publishedAt'] = pd.to_datetime(youtube_df['publishedAt'], errors='coerce')
+    youtube_df['publishedAt'] = youtube_df['publishedAt'].dt.tz_localize(None)
+
+    # 공연 기간 계산 (일수)
+    performance_df['performance_duration'] = (performance_df['end_period'] - performance_df['start_period']).dt.days + 1
+
+    # 아티스트 정보 병합
+    performance_df = performance_df.merge(
+        artists_df[['id', 'followers', 'genre']].rename(columns={'id': 'melon_artist_id'}),
+        on='melon_artist_id',
+        how='left'
+    )
+    
+    # 앨범 메트릭 추가
+    performance_df = add_album_metrics(performance_df, albums_df)
+
+    # 노래 메트릭 추가
+    performance_df = add_song_metrics(performance_df, songs_df)
+
+    # 장르 피처 추가
+    performance_df = add_genre_features(performance_df, songs_df)
+
+    # YouTube 메트릭 추가
+    performance_df = add_youtube_metrics(performance_df, youtube_df)
+
+    # 결측치 처리
+    performance_df.fillna(0, inplace=True)
+
+    # 텍스트 피처 생성 (title과 location에서 키워드 추출)
+    performance_df = extract_text_features(performance_df)
+
+    # 날짜 관련 피처 추가
+    performance_df['performance_month'] = performance_df['start_period'].dt.month.fillna(0).astype(int)
+    performance_df['performance_day'] = performance_df['start_period'].dt.day.fillna(0).astype(int)
+    performance_df['performance_weekday'] = performance_df['start_period'].dt.weekday.fillna(0).astype(int)
+
+    logger.info("데이터 전처리 및 피처 엔지니어링 완료")
+    return performance_df
+
+def add_album_metrics(performance_df, albums_df):
+    """
+    앨범 메트릭을 공연 데이터에 추가하는 함수
+    """
+    def get_related_album_features(row):
+        artist_albums = albums_df[albums_df['artist_id'] == row['melon_artist_id']]
+        related_albums = artist_albums[artist_albums['released_date'] <= row['start_period']]
+        if not related_albums.empty:
+            recent_album = related_albums.sort_values('released_date', ascending=False).iloc[0]
+            return pd.Series({
+                'comments_count': recent_album.get('comments_count', 0),
+                'album_likes': recent_album.get('likes', 0),
+                'album_rating': recent_album.get('rating', 0),
+                'album_rating_count': recent_album.get('rating_count', 0),
+                'track_count': recent_album.get('track_count', 0)
+            })
+        else:
+            return pd.Series({
+                'comments_count': 0,
+                'album_likes': 0,
+                'album_rating': 0,
+                'album_rating_count': 0,
+                'track_count': 0
+            })
+    album_metrics = performance_df.apply(get_related_album_features, axis=1)
+    performance_df = pd.concat([performance_df, album_metrics], axis=1)
+    return performance_df
+
+def add_song_metrics(performance_df, songs_df):
+    """
+    노래 메트릭을 공연 데이터에 추가하는 함수
+    """
+    def get_song_metrics(row):
+        artist_songs = songs_df[songs_df['artist_id'] == row['melon_artist_id']]
+        related_songs = artist_songs[artist_songs['released_date'] <= row['start_period']]
+        if not related_songs.empty:
+            avg_streams = related_songs['streams'].astype(float).mean()
+            avg_popularity = related_songs['spotify_popularity'].astype(float).mean()
+            return pd.Series({
+                'avg_streams': avg_streams,
+                'avg_popularity': avg_popularity
+            })
+        else:
+            return pd.Series({
+                'avg_streams': 0,
+                'avg_popularity': 0
+            })
+    song_metrics = performance_df.apply(get_song_metrics, axis=1)
+    performance_df = pd.concat([performance_df, song_metrics], axis=1)
+    return performance_df
+
+def add_genre_features(performance_df, songs_df):
+    """
+    노래 데이터에서 장르를 추출하여 공연 데이터에 추가하는 함수
+    """
+    # 각 노래의 장르를 리스트 형태로 변환
+    songs_df['genre_list'] = songs_df['genre'].apply(lambda x: x if isinstance(x, list) else [x])
+    
+    # 공연 날짜 이전에 발표된 노래들 중에서 아티스트별로 장르 리스트를 생성
+    def get_artist_genres(row):
+        artist_songs = songs_df[songs_df['artist_id'] == row['melon_artist_id']]
+        related_songs = artist_songs[artist_songs['released_date'] <= row['start_period']]
+        genres = set()
+        for genres_list in related_songs['genre_list']:
+            genres.update(genres_list)
+        return list(genres)
+    
+    performance_df['artist_genres'] = performance_df.apply(get_artist_genres, axis=1)
+    
+    # 모든 장르의 집합을 생성
+    all_genres = set()
+    for genres in performance_df['artist_genres']:
+        all_genres.update(genres)
+    
+    # 원-핫 인코딩
+    for genre in all_genres:
+        genre_col_name = 'genre_' + re.sub(r'\W+', '_', genre)
+        performance_df[genre_col_name] = performance_df['artist_genres'].apply(lambda x: 1 if genre in x else 0)
+    
+    # 필요하지 않은 컬럼 제거
+    performance_df.drop(['artist_genres'], axis=1, inplace=True)
+    
+    return performance_df
+
+def add_youtube_metrics(performance_df, youtube_df):
+    """
+    YouTube 메트릭을 공연 데이터에 추가하는 함수
+    """
+    def get_youtube_metrics(row):
+        artist_videos = youtube_df[(youtube_df['artist_id'] == row['artist_id']) & (youtube_df['publishedAt'] <= row['start_period'])]
+        if not artist_videos.empty:
+            total_views = artist_videos['statistics'].apply(lambda x: int(x.get('viewCount', 0))).sum()
+            total_likes = artist_videos['statistics'].apply(lambda x: int(x.get('likeCount', 0))).sum()
+            total_comments = artist_videos['statistics'].apply(lambda x: int(x.get('commentCount', 0))).sum()
+            video_count = len(artist_videos)
+            avg_views = total_views / video_count if video_count > 0 else 0
+            avg_likes = total_likes / video_count if video_count > 0 else 0
+            avg_comments = total_comments / video_count if video_count > 0 else 0
+            # 마지막 동영상 이후 일수 계산
+            latest_video_date = artist_videos['publishedAt'].max()
+            days_since_last_video = (row['start_period'] - latest_video_date).days
+            return pd.Series({
+                'total_views': total_views,
+                'total_likes': total_likes,
+                'total_comments': total_comments,
+                'avg_views': avg_views,
+                'avg_likes': avg_likes,
+                'avg_comments': avg_comments,
+                'video_count': video_count,
+                'days_since_last_video': days_since_last_video
+            })
+        else:
+            return pd.Series({
+                'total_views': 0,
+                'total_likes': 0,
+                'total_comments': 0,
+                'avg_views': 0,
+                'avg_likes': 0,
+                'avg_comments': 0,
+                'video_count': 0,
+                'days_since_last_video': 0
+            })
+    youtube_metrics = performance_df.apply(get_youtube_metrics, axis=1)
+    performance_df = pd.concat([performance_df, youtube_metrics], axis=1)
+    return performance_df
+
+def extract_text_features(performance_df):
+    """
+    title과 location에서 키워드를 추출하여 텍스트 피처를 생성하는 함수
+    """
+    # 형태소 분석기 초기화
+    okt = Okt()
+
+    def tokenize_text(text):
+        # 문자열이 아닐 경우 문자열로 변환
+        text = str(text)
+        # 특수 문자 및 숫자 제거
+        text = re.sub(r'[^가-힣a-zA-Z\s]', ' ', text)
+        # 형태소 분석을 통해 명사 추출
+        tokens = okt.nouns(text)
+        # 토큰을 공백으로 연결하여 반환
+        return ' '.join(tokens)
+
+    # title과 location에서 키워드 추출
+    performance_df['title_tokens'] = performance_df['title'].apply(tokenize_text)
+    performance_df['location_tokens'] = performance_df['location'].apply(tokenize_text)
+
+    # title과 location의 토큰을 결합하여 text_features 생성
+    performance_df['text_features'] = performance_df['title_tokens'] + ' ' + performance_df['location_tokens']
+
+    # 필요하지 않은 중간 컬럼 제거
+    performance_df.drop(['title_tokens', 'location_tokens'], axis=1, inplace=True)
+
+    return performance_df
+
+def train_model(performance_df):
+    """
+    모델 훈련 및 평가 함수
+    """
+    # 예측에 사용할 피처 선택
+    features = [
+        'performance_duration', 'followers', 'comments_count', 'album_likes',
+        'album_rating', 'album_rating_count', 'track_count', 'avg_streams',
+        'avg_popularity', 'total_views', 'total_likes', 'total_comments',
+        'avg_views', 'avg_likes', 'avg_comments', 'video_count',
+        'days_since_last_video', 'performance_month', 'performance_day', 'performance_weekday'
+    ]
+
+    # 장르 피처 자동 추가
+    genre_cols = [col for col in performance_df.columns if col.startswith('genre_')]
+    features.extend(genre_cols)
+
+    # 텍스트 피처 추가
+    text_feature = 'text_features'
+
+    # 데이터 준비
+    X = performance_df[features + [text_feature]]
+    y = performance_df['revenue'].astype(float)
+
+    # 수익이 있는 데이터만 사용하여 모델 훈련
+    X_known = X[performance_df['revenue'].notnull()]
+    y_known = y[performance_df['revenue'].notnull()]
+
+    # 데이터 분할
+    X_train, X_test, y_train, y_test = train_test_split(X_known, y_known, test_size=0.2, random_state=42)
+
+    # 수치형 및 텍스트 데이터 전처리 설정
+    numeric_features = features
+    numeric_transformer = StandardScaler()
+
+    text_transformer = CountVectorizer(max_features=1000)  # 최대 피처 수 제한
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('text', text_transformer, text_feature)
+        ]
+    )
+
+    # 모델 파이프라인 설정
+    model = RandomForestRegressor(random_state=42)
+
+    clf = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', model)
+    ])
+
+    # 모델 훈련
+    clf.fit(X_train, y_train)
+
+    # 모델 평가
+    y_pred = clf.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    logger.info(f"텍스트 피처를 포함한 RandomForest MAE: {mae}")
+    logger.info(f"텍스트 피처를 포함한 RandomForest R² Score: {r2}")
+
+    # 교차 검증
+    cv_scores = cross_val_score(clf, X_known, y_known, cv=5, scoring='neg_mean_absolute_error')
+    cv_r2_scores = cross_val_score(clf, X_known, y_known, cv=5, scoring='r2')
+    logger.info(f"교차 검증 MAE: {-cv_scores.mean()}")
+    logger.info(f"Cross-validated R² scores: {cv_r2_scores}")
+    logger.info(f"Mean R² score: {cv_r2_scores.mean()}")
+
+    # 피처 중요도 확인
+    importances = clf.named_steps['regressor'].feature_importances_
+    feature_names_num = numeric_features
+    feature_names_text = clf.named_steps['preprocessor'].transformers_[1][1].get_feature_names_out()
+    feature_names = np.concatenate([feature_names_num, feature_names_text])
+    feature_importance_df = pd.DataFrame({
+        'feature': feature_names,
+        'importance': importances
+    }).sort_values('importance', ascending=False)
+    logger.info("피처 중요도:")
+    logger.info(feature_importance_df.head(20))
+
+    # 모델 저장
+    joblib.dump(clf, 'best_model.pkl')
+    logger.info("최고의 모델을 'best_model.pkl'로 저장했습니다.")
+
+    return clf, features + [text_feature]
+
+def predict_revenue(best_model, performance_df, features):
+    """
+    수익을 예측하는 함수
+    """
+    X = performance_df[features]
+    y = performance_df['revenue'].astype(float)
+
+    # 수익이 NaN이거나 0인 데이터를 예측 대상으로 선택
+    X_unknown = X[(performance_df['revenue'].isnull()) | (performance_df['revenue'] == 0)]
+    
+    logger.info(f"예측 대상 데이터 수: {len(X_unknown)}")
+    
+    if not X_unknown.empty:
+        predicted_revenues = best_model.predict(X_unknown)
+        performance_df.loc[(performance_df['revenue'].isnull()) | (performance_df['revenue'] == 0), 'predicted_revenue'] = predicted_revenues
+        logger.info(f"{len(predicted_revenues)}개의 수익을 예측했습니다.")
+    else:
+        logger.info("예측할 데이터가 없습니다.")
+    return performance_df
+
+def save_results(performance_df):
+    """
+    결과를 CSV 파일로 저장하고, Firestore에 업데이트하는 함수
+    """
+    performance_df.to_csv('performance_with_predictions.csv', index=False)
+    logger.info("예측 결과를 'performance_with_predictions.csv'로 저장했습니다.")
+
+def predict_performace_revenue():
+    performance_df, albums_df, songs_df, artists_df, youtube_df = load_data()
+    performance_df = preprocess_data(performance_df, albums_df, songs_df, artists_df, youtube_df)
+    best_model, features = train_model(performance_df)
+    performance_df = predict_revenue(best_model, performance_df, features)
+    save_results(performance_df)
+
+predict_performace_revenue()
